@@ -54,13 +54,10 @@ async def vite_testing():
 # -------------------------
 # BASIC ROUTES
 # -------------------------
-@app.get("/")
+@app.get("/api")
 async def root():
     return {"status": "hello world deploy"}
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
 
 
 # -------------------------
