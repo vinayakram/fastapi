@@ -9,7 +9,7 @@
 
     buildFilter:
       paths:
-        - "frontend/"
+        - "frontend"
         - "main.py"
         - "requirements.txt"
         - "build.sh"
