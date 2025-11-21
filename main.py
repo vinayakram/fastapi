@@ -2,8 +2,11 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from sqlalchemy import create_engine,text
 import shutil
+from dbconnect import get_db_session
 import os
+from config import settings
 
 app = FastAPI()
 
@@ -57,6 +60,18 @@ async def vite_testing():
 @app.get("/api")
 async def root():
     return {"status": "hello world deploy"}
+
+@app.get("/api/health")
+async def health():
+    # Test the connection
+    try:
+        with get_db_session() as session:
+            session.execute(text("select 1"))
+            return {"status": "DB connection working"} 
+    except Exception as e:
+        return {"status": "DB connection not working", "message": str(e)}
+     
+ 
 
 
 
