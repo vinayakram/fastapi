@@ -27,12 +27,17 @@ export default function JobBoard() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>Jobs at {data.company.toUpperCase()}</h2>
+      <h2>Jobs at {data.slug.toUpperCase()}</h2>
 
-      <img src={data.logo} width="120" style={{ marginBottom: 20 }} />
+      <img
+        src={data.logo}
+        width="120"
+        alt={data.slug}
+        style={{ marginBottom: 20 }}
+      />
 
-      {data.jobs.map((job: any, i: number) => (
-        <div key={i} style={{ border: "1px solid #ccc", padding: 15, marginBottom: 10 }}>
+      {data.jobs.map((job: any) => (
+        <div key={job.id} style={{ border: "1px solid #ccc", padding: 15, marginBottom: 10 }}>
           <h3>{job.title}</h3>
           <p>{job.description}</p>
         </div>
