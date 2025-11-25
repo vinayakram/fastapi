@@ -8,6 +8,7 @@ class JobBoard(Base):
   __tablename__ = 'job_boards'
   id = Column(Integer, primary_key=True)
   slug = Column(String, nullable=False, unique=True)
+  logo_url = Column(String, nullable=True)
   job_posts = relationship("JobPost", back_populates="job_board")
 
 class JobPost(Base):
@@ -21,4 +22,6 @@ class JobPost(Base):
 
     # relationship back to job board
     job_board = relationship("JobBoard", back_populates="job_posts")
+    
+
  
