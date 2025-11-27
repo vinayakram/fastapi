@@ -1,0 +1,15 @@
+meta {
+  name: job applications
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{BASE_URL}}/api/job-applications
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

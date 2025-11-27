@@ -1,0 +1,15 @@
+meta {
+  name: status change
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{BASE_URL}}/api/job-posts/
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

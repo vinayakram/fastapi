@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request,Form,UploadFile,File
+from fastapi import FastAPI, HTTPException, Request,Form,UploadFile,File,Response,Depends, Cookie
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse
@@ -10,7 +10,8 @@ from config import settings
 from supabase import create_client,Client
 import os
 from dbconnect import get_db_session
-from models import JobBoard, JobPost
+from auth import authenticate_admin, require_admin
+from models import *
 
 app = FastAPI()
 
@@ -28,6 +29,34 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 if not settings.PRODUCTION:
     app.mount("/uploads",StaticFiles(directory="uploads"))
 
+
+
+class AdminLoginForm(BaseModel):
+   username : str
+   password : str
+
+@app.post("/api/admin-login")
+async def admin_login(
+    response: Response,
+    username: Annotated[str, Form()],
+    password: Annotated[str, Form()]
+):
+    auth_response = authenticate_admin(username, password)
+
+    if auth_response:
+        secure = settings.PRODUCTION
+        response.set_cookie(
+            key="admin_session",
+            value=auth_response,
+            httponly=True,
+            secure=secure,
+            samesite="Lax"
+        )
+        return {"message": "Login successful"}
+
+    raise HTTPException(status_code=400, detail="Invalid admin credentials")
+
+      
 # -----------------------------------------------------
 # GET A SINGLE JOB BOARD
 # -----------------------------------------------------
@@ -54,7 +83,7 @@ async def get_job_board(slug: str, request: Request):
                     "description": post.description,
                     "job_board_id": post.job_board_id,
                 }
-                for post in board.job_posts
+                for post in board.job_posts if post.status == "open"
             ],
         }
 
@@ -80,9 +109,35 @@ def upload_file(filename: str, contents: bytes):
         file_path = UPLOAD_DIR / filename
         with open(file_path, "wb") as f:
             f.write(contents)
-        return f"/uploads/{filename}"
+        return f"http://localhost:8000/uploads/{filename}"
 
-    
+
+def upload_resume(filename: str, contents: bytes):
+
+    if settings.PRODUCTION:
+        bucket = settings.SUPABASE_BUCKET_RESUME
+        path = f"resumes/{filename}"
+        content_type = "application/pdf"
+
+        response = supabase.storage.from_(bucket).upload(
+            path,
+            contents,
+            {"content-type": content_type, "x-upsert": "true"}
+        )
+
+        return f"{settings.SUPABASE_URL}/storage/v1/object/public/{bucket}/{path}"
+
+    else:
+        file_path = UPLOAD_DIR / "resumes"
+        file_path.mkdir(exist_ok=True)
+        full_path = file_path / filename
+
+        with open(full_path, "wb") as f:
+            f.write(contents)
+
+        return f"/uploads/resumes/{filename}"
+
+  
 # -----------------------------------------------------
 # SIMPLE TEST API
 # -----------------------------------------------------
@@ -131,7 +186,7 @@ async def api_job_boards():
 @app.get("/api/job-boards/{job_board_id}/job-posts")
 async def get_job_posts(job_board_id: int):
     with get_db_session() as session:
-        posts = session.query(JobPost).filter(JobPost.job_board_id == job_board_id).all()
+        posts = session.query(JobPost).filter(JobPost.job_board_id == job_board_id,JobPost.status == "open").all()
 
         if not posts:
             raise HTTPException(status_code=404, detail="No posts found for this board")
@@ -161,6 +216,7 @@ class JobBoardForm(BaseModel):
 async def api_create_or_update_job_board(
     slug: Annotated[str, Form(min_length=3, max_length=20)],
     logo: Annotated[UploadFile, File(...)],
+    is_admin: bool = Depends(require_admin)
 ):
     safe_slug = slug.strip().lower()
 
@@ -198,6 +254,225 @@ async def api_create_or_update_job_board(
             "message": "Job board created!",
             "updated": False
         }
+
+@app.get("/api/job-boards/id/{board_id}")
+async def get_board_by_id(board_id: int):
+    with get_db_session() as session:
+        board = session.query(JobBoard).filter(JobBoard.id == board_id).first()
+
+        if not board:
+            raise HTTPException(status_code=404, detail="Job board not found")
+
+        return {
+            "id": board.id,
+            "slug": board.slug,
+            "logo_url": board.logo_url,
+            "jobs": [
+                {
+                    "id": post.id,
+                    "title": post.title,
+                    "description": post.description,
+                    "job_board_id": post.job_board_id,
+                }
+                for post in board.job_posts if post.status == "open"
+            ]
+        }
+
+
+@app.post("/api/job-posts")
+async def create_job_post(
+    job_board_id: Annotated[int, Form()],
+    title: Annotated[str, Form()],
+    description: Annotated[str, Form()]
+):
+    with get_db_session() as session:
+        # Ensure job board exists
+        board = session.query(JobBoard).filter(JobBoard.id == job_board_id).first()
+        if not board:
+            raise HTTPException(404, "Invalid job_board_id")
+
+        new_post = JobPost(
+            job_board_id=job_board_id,
+            title=title,
+            description=description,
+            status="open"
+        )
+
+        session.add(new_post)
+        session.commit()
+        session.refresh(new_post)
+
+        return {
+            "message": "Job post created successfully",
+            "post": {
+                "id": new_post.id,
+                "job_board_id": new_post.job_board_id,
+                "title": new_post.title,
+                "description": new_post.description,
+                "status": new_post.status
+            }
+        }
+
+
+@app.put("/api/job-posts/{post_id}/status")
+async def update_job_status(
+    post_id: int,
+    status: Annotated[str, Form(min_length=4, max_length=10)]
+):
+    status = status.lower()
+
+    if status not in ["open", "closed"]:
+        raise HTTPException(400, "Status must be 'open' or 'closed'")
+
+    with get_db_session() as session:
+        job_post = session.query(JobPost).filter(JobPost.id == post_id).first()
+
+        if not job_post:
+            raise HTTPException(404, "Job post not found")
+
+        job_post.status = status
+        session.commit()
+
+        return {
+            "message": f"Job post {post_id} marked as {status}",
+            "id": post_id,
+            "status": status
+        }
+
+@app.get("/api/job-posts")
+async def list_all_job_posts(status: str = "open"):
+    status = status.lower()
+    if status not in ["open", "closed", "all"]:
+        raise HTTPException(400, "Invalid status filter")
+
+    with get_db_session() as session:
+        query = session.query(JobPost)
+
+        if status != "all":
+            query = query.filter(JobPost.status == status)
+
+        posts = query.all()
+
+        return [
+            {
+                "id": post.id,
+                "title": post.title,
+                "description": post.description,
+                "status": post.status,
+                "job_board_id": post.job_board_id,
+            }
+            for post in posts
+        ]
+
+
+@app.post("/api/job-applications")
+async def create_job_application(
+    job_post_id: Annotated[int, Form()],
+    first_name: Annotated[str, Form()],
+    last_name: Annotated[str, Form()],
+    email: Annotated[str, Form()],
+    resume: Annotated[UploadFile, File(...)]
+):
+    contents = await resume.read()
+    filename = f"{first_name}_{last_name}_{resume.filename}"
+
+    resume_url = upload_resume(filename, contents)
+
+    with get_db_session() as session:
+
+        # Validate job post exists
+        post = session.query(JobPost).filter(JobPost.id == job_post_id).first()
+        if not post:
+            raise HTTPException(404, "Invalid job_post_id")
+
+        # Reject if post is closed
+        if post.status == "closed":
+            raise HTTPException(400, "This job post is closed and cannot accept applications")
+
+        application = JobApplication(
+            job_post_id=job_post_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            resume_url=resume_url
+        )
+
+        session.add(application)
+        session.commit()
+        session.refresh(application)
+
+        return {
+            "message": "Application submitted successfully",
+            "application_id": application.id,
+            "resume_url": resume_url
+        }
+
+
+@app.get("/api/job-applications")
+async def list_job_applications():
+    with get_db_session() as session:
+        apps = session.query(JobApplication).all()
+
+        return [
+            {
+                "id": a.id,
+                "job_post_id": a.job_post_id,
+                "first_name": a.first_name,
+                "last_name": a.last_name,
+                "email": a.email,
+                "resume_url": a.resume_url
+            }
+            for a in apps
+        ]
+
+
+@app.delete("/api/job-boards/id/{board_id}")
+async def delete_job_board(board_id: int):
+    with get_db_session() as session:
+        board = session.query(JobBoard).filter(JobBoard.id == board_id).first()
+
+        if not board:
+            raise HTTPException(404, "Job board not found")
+
+        session.delete(board)
+        session.commit()
+
+        return {"message": f"Job board {board_id} deleted"}
+
+@app.put("/api/job-boards/{board_id}")
+async def api_update_job_board(
+    board_id: int,
+    slug: Annotated[str, Form(min_length=3, max_length=20)],
+    logo: UploadFile | None = File(None)
+):
+    safe_slug = slug.strip().lower()
+
+    with get_db_session() as session:
+        board = session.query(JobBoard).filter(JobBoard.id == board_id).first()
+
+        if not board:
+            raise HTTPException(404, "Job board not found")
+
+        # update slug
+        board.slug = safe_slug
+
+        # update logo only if provided
+        if logo:
+            contents = await logo.read()
+            filename = f"{safe_slug}.png"
+            logo_url = upload_file(filename, contents)
+            board.logo_url = logo_url
+
+        session.commit()
+        session.refresh(board)
+
+        return {
+            "message": "Job board updated",
+            "id": board.id,
+            "slug": board.slug,
+            "logo_url": board.logo_url,
+        }
+
 
 
 @app.get("/{full_path:path}")

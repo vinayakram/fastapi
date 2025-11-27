@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_KEY: str
     SUPABASE_BUCKET: str
+    SUPABASE_BUCKET_RESUME: str
+    ADMIN_USER_NAME: str
+    ADMIN_PASSWORD: str
+    RESEND_API_KEY: str
+    
 
     class Config:
         env_file = ".env"
