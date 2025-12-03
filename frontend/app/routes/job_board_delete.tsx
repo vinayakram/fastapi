@@ -1,9 +1,17 @@
 import { Form, redirect, useLoaderData } from "react-router";
+import { userContext } from "~/context";
 
-export async function clientLoader({ params }) {
-    const res = await fetch(`/api/job-boards/${params.jobBoardId}`);
-    return res.json();
+export async function clientLoader({ context }: ClientLoaderFunctionArgs) {
+  const me = context.get(userContext);
+  const isAdmin = me?.is_admin ?? false;
+
+  if (!isAdmin) {
+    throw redirect("/admin-login");
+  }
+
+  return {};
 }
+
 
 export async function clientAction({ params }) {
     await fetch(`/api/job-boards/id/${params.jobBoardId}`, {

@@ -5,11 +5,12 @@ meta {
 }
 
 get {
-  url: {{BASE_URL}}/job-boards
+  url: {{BASE_URL}}/api/job-boards/2/job-posts
   body: none
-  auth: inherit
+  auth: none
 }
 
 settings {
   encodeUrl: true
+  timeout: 0
 }

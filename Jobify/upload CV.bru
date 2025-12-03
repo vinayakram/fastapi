@@ -5,11 +5,20 @@ meta {
 }
 
 post {
-  url: {{BASE_URL
-  body: none
+  url: {{BASE_URL}}/api/job-applications
+  body: multipartForm
   auth: inherit
+}
+
+body:multipart-form {
+  job_post_id: 7
+  first_name: Dexter
+  last_name: Doe
+  email: dexter=doe@example.com
+  resume: @file(C:\Users\vinayakram.r\OneDrive - Prodapt Solutions Private Limited\Desktop\Dexter-doe.txt)
 }
 
 settings {
   encodeUrl: true
+  timeout: 0
 }

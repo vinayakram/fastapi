@@ -1,5 +1,7 @@
 import { Outlet } from "react-router";
 import "./app.css";
+import {authMiddleware} from "./middleware";
+export const clientMiddleware: Route.clientMiddlewareFunction[] = [authMiddleware];
 
 export default function App() {
   return (

@@ -1,11 +1,15 @@
-import { Link } from "react-router";
+import { Link,redirect } from "react-router";
 import { Avatar, AvatarImage } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
+import { userContext } from "~/context"
 
-export async function clientLoader() {
-    const res = await fetch("/api/job-boards");
+export async function clientLoader({context} : ClientLoaderFunctionArgs){
+	const me = context.get(userContext)
+	const isAdmin = me && me.is_admin
+    const res = await fetch("/api/job-boards");	
+	if (!isAdmin) {throw redirect("/admin-login");}
     const job_boards = await res.json();
-    return { job_boards };
+    return { job_boards,isAdmin };
 }
 
 export default function JobBoards({ loaderData }) {
@@ -15,10 +19,12 @@ export default function JobBoards({ loaderData }) {
             {/* HEADER */}
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-semibold">Job Boards</h1>
-
+				{loaderData.isAdmin
+				 ?<div className="float-right">
                 <Button asChild>
                     <Link to="/job-boards/new">Add New Job Board</Link>
                 </Button>
+				</div>:<></>}
             </div>
 
             {/* Job Board Cards */}
@@ -91,13 +97,13 @@ export default function JobBoards({ loaderData }) {
 
                         {/* ⭐ Edit/Delete buttons under card */}
                         <div className="flex justify-end gap-3 mt-4">
-                            <Button asChild variant="outline" size="sm">
+                            {loaderData.isAdmin?<Button asChild variant="outline" size="sm">
                                 <Link to={`/job-boards/${board.id}/edit`}>Edit</Link>
-                            </Button>
+                            </Button>:<></>}
 
-                            <Button asChild variant="destructive" size="sm">
+                            {loaderData.isAdmin?<Button asChild variant="destructive" size="sm">
                                 <Link to={`/job-boards/${board.id}/delete`}>Delete</Link>
-                            </Button>
+                            </Button>:<></>}
                         </div>
                     </div>
                 ))}

@@ -1,13 +1,34 @@
 import { Form, useLoaderData, redirect, useNavigation } from "react-router";
 
+import { userContext } from "~/context";
+
+
+
 // ---------------------
 // LOAD EXISTING BOARD
 // ---------------------
-export async function clientLoader({ params }) {
-    const res = await fetch(`/api/job-boards/id/${params.jobBoardId}`);
-    if (!res.ok) throw new Response("Board not found", { status: 404 });
-    return res.json();
+
+export async function clientLoader({ context, params }: ClientLoaderFunctionArgs) {
+  // 1️⃣ ADMIN CHECK
+  const me = context.get(userContext);
+  const isAdmin = me?.is_admin ?? false;
+
+  if (!isAdmin) {
+    throw redirect("/admin-login");
+  }
+
+  // 2️⃣ FETCH JOB BOARD DETAILS
+  const res = await fetch(`/api/job-boards/id/${params.jobBoardId}`);
+
+  if (!res.ok) {
+    throw new Response("Board not found", { status: 404 });
+  }
+
+  const board = await res.json();
+
+  return { board };
 }
+
 
 // ---------------------
 // HANDLE UPDATE

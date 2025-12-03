@@ -1,0 +1,53 @@
+John Doe
+Chennai, India
+Email: john.doe@example.com
+Phone: +91 98765 43210
+
+--------------------------------------------------
+PROFESSIONAL SUMMARY
+--------------------------------------------------
+Motivated and detail-oriented software engineer with 2+ years 
+of experience in developing web applications, APIs and automation 
+scripts. Strong knowledge of Python, FastAPI and SQL databases.
+
+--------------------------------------------------
+SKILLS
+--------------------------------------------------
+• Python, FastAPI, Flask
+• HTML, CSS, JavaScript
+• PostgreSQL, MySQL
+• Git, Docker, Linux
+• REST API Development
+
+--------------------------------------------------
+EXPERIENCE
+--------------------------------------------------
+Software Engineer – ABC Technologies (2022–Present)
+• Developed RESTful APIs using FastAPI
+• Improved database queries for 25% better performance
+• Collaborated with UI team to build frontend integrations
+
+--------------------------------------------------
+EDUCATION
+--------------------------------------------------
+B.E. Computer Science – XYZ University, 2022
+
+--------------------------------------------------
+PROJECTS
+--------------------------------------------------
+Job Board System
+• Built a job portal backend using FastAPI and SQLAlchemy.
+• Integrated Supabase for file storage and image uploads.
+
+--------------------------------------------------
+CERTIFICATIONS
+--------------------------------------------------
+• Python for Everybody – Coursera
+• SQL Specialization – Coursera
+
+--------------------------------------------------
+DECLARATION
+--------------------------------------------------
+I hereby declare that the information provided is true to the 
+best of my knowledge.
+

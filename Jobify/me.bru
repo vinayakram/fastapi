@@ -1,11 +1,11 @@
 meta {
-  name: Delete jobboard
+  name: me
   type: http
-  seq: 6
+  seq: 9
 }
 
-delete {
-  url: {{BASE_URL}}/api/job-boards/google
+get {
+  url: {{BASE_URL}}/api/me
   body: none
   auth: inherit
 }

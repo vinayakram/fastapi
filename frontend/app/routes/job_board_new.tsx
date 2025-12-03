@@ -1,5 +1,17 @@
 import { Form, redirect, useActionData } from "react-router";
 import { useState } from "react";
+import { userContext } from "~/context";
+
+export async function clientLoader({ context }: ClientLoaderFunctionArgs) {
+  const me = context.get(userContext);
+  const isAdmin = me?.is_admin ?? false;
+
+  if (!isAdmin) {
+    throw redirect("/admin-login");
+  }
+
+  return {};
+}
 
 export async function clientAction({ request }) {
     const formData = await request.formData();

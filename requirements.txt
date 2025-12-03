@@ -6,3 +6,7 @@ psycopg2-binary==2.9.11
 alembic==1.17.2
 supabase==2.24.0
 httpx==0.28.1
+openai==2.8.1 # LLM
+PyPDF2==3.0.1 # PDF to Text
+langchain==1.1.0 # Langchain framework
+langchain-openai==1.1.0 # Langchain Open AI interface

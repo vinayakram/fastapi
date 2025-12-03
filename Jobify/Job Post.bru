@@ -6,10 +6,17 @@ meta {
 
 post {
   url: {{BASE_URL}}/api/job-posts
-  body: none
+  body: multipartForm
   auth: inherit
+}
+
+body:multipart-form {
+  job_board_id: 13
+  title: Senior consultant
+  description: Experience with Python, FastAPI, SQLAlchemy
 }
 
 settings {
   encodeUrl: true
+  timeout: 0
 }
