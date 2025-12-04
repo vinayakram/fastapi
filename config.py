@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ADMIN_USER_NAME: str
     ADMIN_PASSWORD: str
     RESEND_API_KEY: str
-    OPEN_API_KEY: str
+    OPENAI_API_KEY: str
     
 
     class Config:

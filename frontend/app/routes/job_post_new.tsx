@@ -1,8 +1,8 @@
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate,redirect } from "react-router";
 import { useState } from "react";
 import { userContext } from "~/context";
 
-export async function clientLoader({ context }: ClientLoaderFunctionArgs) {
+export async function clientLoader({ context }) {
   const me = context.get(userContext);
   const isAdmin = me?.is_admin ?? false;
 
@@ -16,108 +16,228 @@ export async function clientLoader({ context }: ClientLoaderFunctionArgs) {
 export default function JobPostForm() {
   const { jobBoardId } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e) {
+  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState("review"); // review → submit
+
+  // NEW: 3-output pipeline
+  const [summary, setSummary] = useState("");
+  const [rewritten, setRewritten] = useState("");
+  const [fixed, setFixed] = useState("");
+
+  async function handleSubmit(e: any) {
     e.preventDefault();
     setLoading(true);
 
     const formData = new FormData(e.target);
+    const title = formData.get("title") as string;
+    const description = formData.get("description") as string;
 
-    const payload = {
-      title: formData.get("title"),
-      description: formData.get("description"),
-      job_board_id: parseInt(jobBoardId),
-    };
+    // STEP 1 → AI REVIEW (3 prompts)
+    if (mode === "review") {
+      const res = await fetch("/api/review-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_description: description }),
+      });
 
-    // Submit as form data (FastAPI expects Form())
-    const body = new URLSearchParams(payload);
+      const data = await res.json();
+
+      // store all 3 results
+      setSummary(data.summary);
+      setRewritten(data.rewritten);
+      setFixed(data.fixed);
+
+      setMode("submit");
+      setLoading(false);
+      return;
+    }
+
+    // STEP 2 → SUBMIT JOB
+    const payload = new URLSearchParams({
+      job_board_id: jobBoardId!,
+      title,
+      description,
+    });
 
     await fetch("/api/job-posts", {
       method: "POST",
-      body,
+      body: payload,
     });
 
     navigate(`/job-boards/${jobBoardId}/job-posts`);
   }
 
+  // NEW: Apply the fixed improved JD into the textarea
+  function applyFix() {
+    const textarea = document.querySelector(
+      "textarea[name='description']"
+    ) as HTMLTextAreaElement;
+
+    if (textarea) textarea.value = fixed;
+  }
+
   return (
     <div
       style={{
-        maxWidth: "700px",
-        margin: "50px auto",
-        padding: "30px",
-        borderRadius: "12px",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-        backgroundColor: "#fff",
+        maxWidth: "750px",
+        margin: "40px auto",
+        padding: "20px",
         fontFamily: "sans-serif",
       }}
     >
-      <h1 style={{ textAlign: "center", marginBottom: "30px", fontSize: "28px" }}>
+      <h1
+        style={{
+          textAlign: "center",
+          marginBottom: "25px",
+          fontSize: "28px",
+          fontWeight: "600",
+        }}
+      >
         Create Job Post
       </h1>
 
-      <form
-        onSubmit={handleSubmit}
+      <div
         style={{
-          display: "grid",
-          gap: "25px",
+          background: "#ffffff",
+          padding: "25px",
+          borderRadius: "12px",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
         }}
       >
-        {/* Job Title */}
-        <div style={{ display: "grid", gap: "8px" }}>
-          <label style={{ fontWeight: "bold", fontSize: "14px" }}>Job Title</label>
-          <input
-            name="title"
-            required
-            placeholder="Enter job title"
-            style={{
-              padding: "12px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              fontSize: "14px",
-            }}
-          />
+        {/* Step Indicator */}
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "12px 15px",
+            background: "#eef2ff",
+            borderRadius: "8px",
+            fontWeight: "600",
+            color: "#4338ca",
+            fontSize: "14px",
+          }}
+        >
+          {mode === "review"
+            ? "Step 1 of 2 — Review Job Description with AI"
+            : "Step 2 of 2 — Submit Final Job Post"}
         </div>
 
-        {/* Job Description */}
-        <div style={{ display: "grid", gap: "8px" }}>
-          <label style={{ fontWeight: "bold", fontSize: "14px" }}>Job Description</label>
-          <textarea
-            name="description"
-            rows={6}
-            placeholder="Enter job description"
-            style={{
-              padding: "12px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              fontSize: "14px",
-              resize: "vertical",
-            }}
-          />
-        </div>
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: "grid",
+            gap: "20px",
+          }}
+        >
+          {/* Job Title */}
+          <div style={{ display: "grid", gap: "6px" }}>
+            <label style={{ fontWeight: "600", fontSize: "14px" }}>
+              Job Title
+            </label>
+            <input
+              name="title"
+              required
+              placeholder="Enter job title"
+              style={{
+                padding: "12px",
+                borderRadius: "8px",
+                border: "1px solid #ccc",
+                fontSize: "15px",
+              }}
+            />
+          </div>
 
-        {/* Submit Button */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: "12px 25px",
-              fontSize: "16px",
-              fontWeight: "bold",
-              color: "#fff",
-              backgroundColor: "#007bff",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              transition: "background 0.3s",
-            }}
-          >
-            {loading ? "Submitting..." : "Submit Job"}
-          </button>
-        </div>
-      </form>
+          {/* Job Description */}
+          <div style={{ display: "grid", gap: "6px" }}>
+            <label style={{ fontWeight: "600", fontSize: "14px" }}>
+              Job Description
+            </label>
+            <textarea
+              name="description"
+              rows={6}
+              placeholder="Enter job description..."
+              style={{
+                padding: "12px",
+                borderRadius: "8px",
+                border: "1px solid #ccc",
+                fontSize: "15px",
+                resize: "vertical",
+              }}
+            />
+          </div>
+
+          {/* AI Review Section */}
+          {(summary || rewritten) && (
+            <div
+              style={{
+                marginTop: "10px",
+                padding: "18px",
+                background: "#f9fafb",
+                borderRadius: "10px",
+                border: "1px solid #e5e7eb",
+                color: "#374151",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              <h3 style={{ marginBottom: "10px", fontSize: "18px" }}>
+                AI Summary of Issues
+              </h3>
+              <div style={{ fontSize: "14px", lineHeight: "1.6" }}>
+                {summary}
+              </div>
+
+              <h3 style={{ margin: "20px 0 10px", fontSize: "18px" }}>
+                Rewritten Problem Areas
+              </h3>
+              <div style={{ fontSize: "14px", lineHeight: "1.6" }}>
+                {rewritten}
+              </div>
+
+              <button
+                type="button"
+                onClick={applyFix}
+                style={{
+                  marginTop: "16px",
+                  padding: "10px 20px",
+                  background: "#10b981",
+                  borderRadius: "8px",
+                  color: "white",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Fix for Me
+              </button>
+            </div>
+          )}
+
+          {/* Submit / Review Button */}
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: "12px 30px",
+                fontSize: "16px",
+                fontWeight: "700",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+                color: "#fff",
+                backgroundColor: mode === "review" ? "#2563eb" : "#10b981",
+                transition: "0.2s",
+              }}
+            >
+              {loading
+                ? "Processing..."
+                : mode === "review"
+                ? "Review with AI"
+                : "Submit Job"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

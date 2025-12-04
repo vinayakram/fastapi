@@ -14,8 +14,9 @@ from auth import authenticate_admin, require_admin,AdminSessionMiddleware,AdminA
 from models import *
 from emailer import send_email
 
-
+from routers import job_review
 app = FastAPI()
+app.include_router(job_review.router, prefix="/api")
 app.add_middleware(AdminAuthzMiddleware)
 app.add_middleware(AdminSessionMiddleware)
 
