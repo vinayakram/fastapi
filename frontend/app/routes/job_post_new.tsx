@@ -1,4 +1,4 @@
-import { useParams, useNavigate,redirect } from "react-router";
+import { useParams, useNavigate, redirect } from "react-router";
 import { useState } from "react";
 import { userContext } from "~/context";
 
@@ -18,22 +18,25 @@ export default function JobPostForm() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState("review"); // review → submit
+  const [mode, setMode] = useState<"review" | "submit">("review");
 
-  // NEW: 3-output pipeline
+  // Controlled Inputs
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+
+  // AI Outputs
   const [summary, setSummary] = useState("");
   const [rewritten, setRewritten] = useState("");
   const [fixed, setFixed] = useState("");
+
+  // Resume Recommendations
+  const [recommendations, setRecommendations] = useState<any[]>([]);
 
   async function handleSubmit(e: any) {
     e.preventDefault();
     setLoading(true);
 
-    const formData = new FormData(e.target);
-    const title = formData.get("title") as string;
-    const description = formData.get("description") as string;
-
-    // STEP 1 → AI REVIEW (3 prompts)
+    // STEP 1 → AI REVIEW (with 3-step prompt pipeline)
     if (mode === "review") {
       const res = await fetch("/api/review-job", {
         method: "POST",
@@ -43,17 +46,16 @@ export default function JobPostForm() {
 
       const data = await res.json();
 
-      // store all 3 results
-      setSummary(data.summary);
-      setRewritten(data.rewritten);
-      setFixed(data.fixed);
+      setSummary(data.summary || "");
+      setRewritten(data.rewritten || "");
+      setFixed(data.fixed || "");
 
       setMode("submit");
       setLoading(false);
       return;
     }
 
-    // STEP 2 → SUBMIT JOB
+    // STEP 2 → SUBMIT FINAL JOB POST
     const payload = new URLSearchParams({
       job_board_id: jobBoardId!,
       title,
@@ -68,13 +70,32 @@ export default function JobPostForm() {
     navigate(`/job-boards/${jobBoardId}/job-posts`);
   }
 
-  // NEW: Apply the fixed improved JD into the textarea
+  // Apply FIXED job description
   function applyFix() {
-    const textarea = document.querySelector(
-      "textarea[name='description']"
-    ) as HTMLTextAreaElement;
+    setDescription(fixed);
+  }
 
-    if (textarea) textarea.value = fixed;
+  // NEW → Candidate Recommendations from Vector DB
+  async function recommendCandidates() {
+    if (!description.trim()) {
+      alert("Please enter a job description first.");
+      return;
+    }
+
+    setLoading(true);
+
+    const res = await fetch("/api/recommend-resumes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_description: description,
+        top_k: 5,
+      }),
+    });
+
+    const data = await res.json();
+    setRecommendations(data.recommendations || []); // safe fallback
+    setLoading(false);
   }
 
   return (
@@ -118,16 +139,13 @@ export default function JobPostForm() {
           }}
         >
           {mode === "review"
-            ? "Step 1 of 2 — Review Job Description with AI"
-            : "Step 2 of 2 — Submit Final Job Post"}
+            ? "Step 1 — AI Review + Candidate Recommendations"
+            : "Step 2 — Submit Final Job Post"}
         </div>
 
         <form
           onSubmit={handleSubmit}
-          style={{
-            display: "grid",
-            gap: "20px",
-          }}
+          style={{ display: "grid", gap: "20px" }}
         >
           {/* Job Title */}
           <div style={{ display: "grid", gap: "6px" }}>
@@ -136,6 +154,8 @@ export default function JobPostForm() {
             </label>
             <input
               name="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               required
               placeholder="Enter job title"
               style={{
@@ -154,6 +174,8 @@ export default function JobPostForm() {
             </label>
             <textarea
               name="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               rows={6}
               placeholder="Enter job description..."
               style={{
@@ -166,7 +188,7 @@ export default function JobPostForm() {
             />
           </div>
 
-          {/* AI Review Section */}
+          {/* AI Review Output */}
           {(summary || rewritten) && (
             <div
               style={{
@@ -212,8 +234,89 @@ export default function JobPostForm() {
             </div>
           )}
 
-          {/* Submit / Review Button */}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          {/* Resume Recommendations */}
+          {recommendations?.length > 0 && (
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "18px",
+                background: "#f0fdf4",
+                borderRadius: "10px",
+                border: "1px solid #86efac",
+              }}
+            >
+              <h3
+                style={{
+                  marginBottom: "12px",
+                  fontSize: "18px",
+                  color: "#166534",
+                }}
+              >
+                Recommended Candidates
+              </h3>
+
+              {recommendations.map((r, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: "10px 0",
+                    borderBottom:
+                      i < recommendations.length - 1
+                        ? "1px solid #d1fae5"
+                        : "none",
+                  }}
+                >
+                  <strong>{r.metadata?.applicant_name}</strong>
+                  <br />
+                  <span>{r.metadata?.email}</span>
+                  <br />
+                  <span>
+                    Match Score: {(r.score * 100).toFixed(1)}%
+                  </span>
+
+                  {r.metadata?.filename && (
+                    <div>
+                      <a
+                        href={`/uploads/resumes/${r.metadata.filename}`}
+                        target="_blank"
+                        style={{ color: "#2563eb", fontSize: "14px" }}
+                      >
+                        View Resume
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginTop: "10px",
+            }}
+          >
+            {/* Recommend Button */}
+            {mode === "review" && (
+              <button
+                type="button"
+                onClick={recommendCandidates}
+                style={{
+                  padding: "10px 20px",
+                  background: "#9333ea",
+                  color: "white",
+                  borderRadius: "8px",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Recommend Candidates
+              </button>
+            )}
+
+            {/* Review / Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -225,8 +328,8 @@ export default function JobPostForm() {
                 border: "none",
                 cursor: "pointer",
                 color: "#fff",
-                backgroundColor: mode === "review" ? "#2563eb" : "#10b981",
-                transition: "0.2s",
+                backgroundColor:
+                  mode === "review" ? "#2563eb" : "#10b981",
               }}
             >
               {loading

@@ -13,6 +13,10 @@ from dbconnect import get_db_session
 from auth import authenticate_admin, require_admin,AdminSessionMiddleware,AdminAuthzMiddleware,delete_admin_session
 from models import *
 from emailer import send_email
+from resume_utils import extract_text_from_pdf_bytes
+from resume_ingest import ingest_resume_into_vector_db
+from ai import evaluate_resume_with_ai
+from vector_store import vector_store, embedding
 
 from routers import job_review
 app = FastAPI()
@@ -41,6 +45,10 @@ class JobDescriptionCheckRequest(BaseModel):
 class AdminLoginForm(BaseModel):
    username : str
    password : str
+   
+class RecommendRequest(BaseModel):
+    job_description: str
+    top_k: int | None = 5
 
 @app.post("/api/admin-login")
 async def admin_login(
@@ -424,7 +432,38 @@ async def list_all_job_posts(status: str = "open"):
         ]
 
 
-@app.post("/api/job-applications")
+@app.post("/api/recommend-resumes")
+async def recommend_resumes(body: RecommendRequest):
+    description = body.job_description
+    top_k = body.top_k or 5
+
+    try:
+        vs = vector_store()
+        embedder = embedding()
+
+        job_vector = embedder.embed_query(description)
+
+        results = vs.similarity_search_by_vector(job_vector, k=top_k)
+
+        recommendations = [
+            {
+                "score": r.metadata.get("score"),
+                "filename": r.metadata.get("filename"),
+                "applicant": r.metadata.get("applicant_name"),
+                "email": r.metadata.get("email"),
+                "job_post_id": r.metadata.get("job_post_id"),
+                "snippet": r.page_content[:250] + "..."
+            }
+            for r in results
+        ]
+
+        return {"recommendations": recommendations}
+
+    except Exception as e:
+        print("QDRANT SEARCH ERROR:", e)
+        raise HTTPException(500, f"Qdrant search failed: {e}")
+
+
 @app.post("/api/job-applications")
 async def create_job_application(
     background_tasks: BackgroundTasks,
@@ -434,10 +473,11 @@ async def create_job_application(
     email: Annotated[str, Form()],
     resume: Annotated[UploadFile, File(...)]
 ):
-    contents = await resume.read()
+    #resume_content = await resume.read()
+    resume_bytes = await resume.read()
     filename = f"{first_name}_{last_name}_{resume.filename}"
 
-    resume_url = upload_resume(filename, contents)
+    resume_url = upload_resume(filename, resume_bytes)
 
     with get_db_session() as session:
         post = session.query(JobPost).filter(JobPost.id == job_post_id).first()
@@ -474,7 +514,9 @@ async def create_job_application(
 
     # Background email task
     background_tasks.add_task(send_email, email, subject, body)
-    background_tasks.add_task(evaluate_resume, resume_content, jobPost.description, new_job_application.id)
+    background_tasks.add_task(evaluate_resume, resume_bytes, post.description, application_id)
+    # NEW: QDRANT RESUME INGESTION
+    background_tasks.add_task(ingest_resume_into_vector_db,resume_bytes,{"filename": filename,"applicant_name": f"{first_name} {last_name}","email": email,"job_post_id": job_post_id})
 
     return {
         "message": "Application submitted successfully",
